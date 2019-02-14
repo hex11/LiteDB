@@ -35,7 +35,36 @@ namespace LiteDB
         /// <summary>
         /// Get internal .NET value object
         /// </summary>
-        public virtual object RawValue { get; private set; }
+        public virtual object RawValue
+        {
+            get {
+                if (raw != null)
+                    return raw;
+                if (Type == BsonType.Null)
+                    return null;
+
+                // then it's a inplace value, which must be returned as a boxed value.
+                object boxedValue = null;
+                if (Type == BsonType.Int32)
+                    boxedValue = (int)inplace;
+                if (Type == BsonType.Int64)
+                    boxedValue = inplace;
+                if (Type == BsonType.Boolean)
+                    boxedValue = inplace != 0;
+
+                // (should we use raw to cache the object?)
+                raw = boxedValue;
+                return boxedValue;
+            }
+            private set {
+                raw = value;
+            }
+        }
+
+        object raw;
+
+        // use this field to store some value types to avoid boxing in some cases
+        long inplace;
 
         /// <summary>
         /// Remove this value from parent
@@ -63,13 +92,13 @@ namespace LiteDB
         public BsonValue(Int32 value)
         {
             this.Type = BsonType.Int32;
-            this.RawValue = value;
+            this.inplace = value;
         }
 
         public BsonValue(Int64 value)
         {
             this.Type = BsonType.Int64;
-            this.RawValue = value;
+            this.inplace = value;
         }
 
         public BsonValue(Double value)
@@ -123,7 +152,7 @@ namespace LiteDB
         public BsonValue(Boolean value)
         {
             this.Type = BsonType.Boolean;
-            this.RawValue = value;
+            this.inplace = value ? 1 : 0;
         }
 
         public BsonValue(DateTime value)
@@ -140,62 +169,59 @@ namespace LiteDB
 
         public BsonValue(object value)
         {
-            this.RawValue = value;
+            if (value == null) {
+                this.Type = BsonType.Null;
+            } else if (value is Int32 i32) {
+                this.Type = BsonType.Int32;
+                this.inplace = i32;
+            } else if (value is Int64 i64) {
+                this.Type = BsonType.Int64;
+                this.inplace = i64;
+            } else if (value is Boolean b) {
+                this.Type = BsonType.Boolean;
+                this.inplace = b ? 1 : 0;
+            } else {
+                this.RawValue = value;
+                if (value is Double) this.Type = BsonType.Double;
+                else if (value is Decimal) this.Type = BsonType.Decimal;
+                else if (value is String) this.Type = BsonType.String;
+                else if (value is Dictionary<string, BsonValue>) this.Type = BsonType.Document;
+                else if (value is List<BsonValue>) this.Type = BsonType.Array;
+                else if (value is Byte[]) this.Type = BsonType.Binary;
+                else if (value is ObjectId) this.Type = BsonType.ObjectId;
+                else if (value is Guid) this.Type = BsonType.Guid;
+                else if (value is DateTime) {
+                    this.Type = BsonType.DateTime;
+                    this.RawValue = ((DateTime)value).Truncate();
+                } else if (value is BsonValue v) {
+                    this.Type = v.Type;
+                    this.raw = v.raw;
+                    this.inplace = v.inplace;
+                } else {
+                    // test first for dictionary (because IDictionary implements IEnumerable)
+                    if (value is System.Collections.IDictionary dictionary) {
+                        var dict = new Dictionary<string, BsonValue>();
 
-            if (value == null) this.Type = BsonType.Null;
-            else if (value is Int32) this.Type = BsonType.Int32;
-            else if (value is Int64) this.Type = BsonType.Int64;
-            else if (value is Double) this.Type = BsonType.Double;
-            else if (value is Decimal) this.Type = BsonType.Decimal;
-            else if (value is String) this.Type = BsonType.String;
-            else if (value is Dictionary<string, BsonValue>) this.Type = BsonType.Document;
-            else if (value is List<BsonValue>) this.Type = BsonType.Array;
-            else if (value is Byte[]) this.Type = BsonType.Binary;
-            else if (value is ObjectId) this.Type = BsonType.ObjectId;
-            else if (value is Guid) this.Type = BsonType.Guid;
-            else if (value is Boolean) this.Type = BsonType.Boolean;
-            else if (value is DateTime)
-            {
-                this.Type = BsonType.DateTime;
-                this.RawValue = ((DateTime)value).Truncate();
-            }
-            else if (value is BsonValue)
-            {
-                var v = (BsonValue)value;
-                this.Type = v.Type;
-                this.RawValue = v.RawValue;
-            }
-            else
-            {
-                // test first for dictionary (because IDictionary implements IEnumerable)
-                if (value is System.Collections.IDictionary dictionary)
-                {
-                    var dict = new Dictionary<string, BsonValue>();
+                        foreach (var key in dictionary.Keys) {
+                            dict.Add(key.ToString(), new BsonValue(dictionary[key]));
+                        }
 
-                    foreach (var key in dictionary.Keys)
-                    {
-                        dict.Add(key.ToString(), new BsonValue(dictionary[key]));
+                        this.Type = BsonType.Document;
+                        this.RawValue = dict;
+                    } else if (value is System.Collections.IEnumerable enumerable) {
+                        var list = new List<BsonValue>();
+                        if (value is System.Collections.ICollection coll)
+                            list.Capacity = coll.Count;
+
+                        foreach (var x in enumerable) {
+                            list.Add(new BsonValue(x));
+                        }
+
+                        this.Type = BsonType.Array;
+                        this.RawValue = list;
+                    } else {
+                        throw new InvalidCastException("Value is not a valid BSON data type - Use Mapper.ToDocument for more complex types converts");
                     }
-
-                    this.Type = BsonType.Document;
-                    this.RawValue = dict;
-                }
-                else if (value is System.Collections.IEnumerable enumerable)
-                {
-                    var list = new List<BsonValue>();
-                    if (value is System.Collections.ICollection coll)
-                        list.Capacity = coll.Count;
-
-                    foreach (var x in enumerable) {
-                        list.Add(new BsonValue(x));
-                    }
-
-                    this.Type = BsonType.Array;
-                    this.RawValue = list;
-                }
-                else
-                {
-                    throw new InvalidCastException("Value is not a valid BSON data type - Use Mapper.ToDocument for more complex types converts");
                 }
             }
         }
@@ -225,32 +251,44 @@ namespace LiteDB
 
         public bool AsBoolean
         {
-            get { return this.Type == BsonType.Boolean ? (Boolean)this.RawValue : default(Boolean); }
+            get { return inplace != 0; }
         }
 
         public string AsString
         {
-            get { return this.Type != BsonType.Null ? this.RawValue.ToString() : default(String); }
+            get { return this.RawValue?.ToString(); }
         }
 
         public int AsInt32
         {
-            get { return this.IsNumber ? Convert.ToInt32(this.RawValue) : default(Int32); }
+            get {
+                if (IsInplace) return (int)inplace;
+                return this.IsNumber ? Convert.ToInt32(this.RawValue) : default(Int32);
+            }
         }
 
         public long AsInt64
         {
-            get { return this.IsNumber ? Convert.ToInt64(this.RawValue) : default(Int64); }
+            get {
+                if (IsInplace) return inplace;
+                return this.IsNumber ? Convert.ToInt64(this.RawValue) : default(Int64);
+            }
         }
 
         public double AsDouble
         {
-            get { return this.IsNumber ? Convert.ToDouble(this.RawValue) : default(Double); }
+            get {
+                if (IsInplace) return inplace;
+                return this.IsNumber ? Convert.ToDouble(this.RawValue) : default(Double);
+            }
         }
 
         public decimal AsDecimal
         {
-            get { return this.IsNumber ? Convert.ToDecimal(this.RawValue) : default(Decimal); }
+            get {
+                if (IsInplace) return inplace;
+                return this.IsNumber ? Convert.ToDecimal(this.RawValue) : default(Decimal);
+            }
         }
 
         public DateTime AsDateTime
@@ -352,6 +390,13 @@ namespace LiteDB
             get { return this.Type == BsonType.MaxValue; }
         }
 
+        bool IsInplace
+        {
+            get {
+                return inplace != 0 || IsInt32 || IsInt64 || IsBoolean;
+            }
+        }
+
         #endregion
 
         #region Implicit Ctor
@@ -359,7 +404,7 @@ namespace LiteDB
         // Int32
         public static implicit operator Int32(BsonValue value)
         {
-            return (Int32)value.RawValue;
+            return value.AsInt32;
         }
 
         // Int32
@@ -371,7 +416,7 @@ namespace LiteDB
         // Int64
         public static implicit operator Int64(BsonValue value)
         {
-            return (Int64)value.RawValue;
+            return value.AsInt64;
         }
 
         // Int64
@@ -491,7 +536,7 @@ namespace LiteDB
         // Boolean
         public static implicit operator Boolean(BsonValue value)
         {
-            return (Boolean)value.RawValue;
+            return value.AsBoolean;
         }
 
         // Boolean
@@ -517,18 +562,12 @@ namespace LiteDB
         {
             if (!left.IsNumber || !right.IsNumber) return BsonValue.Null;
 
-            if (left.IsInt32 && right.IsInt32) return left.AsInt32 + right.AsInt32;
-            if (left.IsInt64 && right.IsInt64) return left.AsInt64 + right.AsInt64;
-            if (left.IsDouble && right.IsDouble) return left.AsDouble + right.AsDouble;
-            if (left.IsDecimal && right.IsDecimal) return left.AsDecimal + right.AsDecimal;
-
-            var result = left.AsDecimal + right.AsDecimal;
             var type = (BsonType)Math.Max((int)left.Type, (int)right.Type);
 
-            return
-                type == BsonType.Int64 ? new BsonValue((Int64)result) :
-                type == BsonType.Double ? new BsonValue((Double)result) :
-                new BsonValue(result);
+            if (type == BsonType.Int32) return left.AsInt32 + right.AsInt32;
+            if (type == BsonType.Int64) return left.AsInt64 + right.AsInt64;
+            if (type == BsonType.Double) return left.AsDouble + right.AsDouble;
+            return left.AsDecimal + right.AsDecimal;
         }
 
         // -
@@ -536,18 +575,12 @@ namespace LiteDB
         {
             if (!left.IsNumber || !right.IsNumber) return BsonValue.Null;
 
-            if (left.IsInt32 && right.IsInt32) return left.AsInt32 - right.AsInt32;
-            if (left.IsInt64 && right.IsInt64) return left.AsInt64 - right.AsInt64;
-            if (left.IsDouble && right.IsDouble) return left.AsDouble - right.AsDouble;
-            if (left.IsDecimal && right.IsDecimal) return left.AsDecimal - right.AsDecimal;
-
-            var result = left.AsDecimal - right.AsDecimal;
             var type = (BsonType)Math.Max((int)left.Type, (int)right.Type);
 
-            return
-                type == BsonType.Int64 ? new BsonValue((Int64)result) :
-                type == BsonType.Double ? new BsonValue((Double)result) :
-                new BsonValue(result);
+            if (type == BsonType.Int32) return left.AsInt32 - right.AsInt32;
+            if (type == BsonType.Int64) return left.AsInt64 - right.AsInt64;
+            if (type == BsonType.Double) return left.AsDouble - right.AsDouble;
+            return left.AsDecimal - right.AsDecimal;
         }
 
         // *
@@ -555,18 +588,12 @@ namespace LiteDB
         {
             if (!left.IsNumber || !right.IsNumber) return BsonValue.Null;
 
-            if (left.IsInt32 && right.IsInt32) return left.AsInt32 * right.AsInt32;
-            if (left.IsInt64 && right.IsInt64) return left.AsInt64 * right.AsInt64;
-            if (left.IsDouble && right.IsDouble) return left.AsDouble * right.AsDouble;
-            if (left.IsDecimal && right.IsDecimal) return left.AsDecimal * right.AsDecimal;
-
-            var result = left.AsDecimal * right.AsDecimal;
             var type = (BsonType)Math.Max((int)left.Type, (int)right.Type);
 
-            return
-                type == BsonType.Int64 ? new BsonValue((Int64)result) :
-                type == BsonType.Double ? new BsonValue((Double)result) :
-                new BsonValue(result);
+            if (type == BsonType.Int32) return left.AsInt32 * right.AsInt32;
+            if (type == BsonType.Int64) return left.AsInt64 * right.AsInt64;
+            if (type == BsonType.Double) return left.AsDouble * right.AsDouble;
+            return left.AsDecimal * right.AsDecimal;
         }
 
         // /
@@ -613,8 +640,8 @@ namespace LiteDB
                 case BsonType.MaxValue:
                     return 0;
 
-                case BsonType.Int32: return ((Int32)this.RawValue).CompareTo((Int32)other.RawValue);
-                case BsonType.Int64: return ((Int64)this.RawValue).CompareTo((Int64)other.RawValue);
+                case BsonType.Int32: return this.AsInt32.CompareTo(other.AsInt32);
+                case BsonType.Int64: return this.AsInt64.CompareTo(other.AsInt64);
                 case BsonType.Double: return ((Double)this.RawValue).CompareTo((Double)other.RawValue);
                 case BsonType.Decimal: return ((Decimal)this.RawValue).CompareTo((Decimal)other.RawValue);
 
@@ -627,7 +654,7 @@ namespace LiteDB
                 case BsonType.ObjectId: return ((ObjectId)this.RawValue).CompareTo((ObjectId)other.RawValue);
                 case BsonType.Guid: return ((Guid)this.RawValue).CompareTo((Guid)other.RawValue);
 
-                case BsonType.Boolean: return ((Boolean)this.RawValue).CompareTo((Boolean)other.RawValue);
+                case BsonType.Boolean: return this.AsBoolean.CompareTo(other.AsBoolean);
                 case BsonType.DateTime:
                     var d0 = (DateTime)this.RawValue;
                     var d1 = (DateTime)other.RawValue;

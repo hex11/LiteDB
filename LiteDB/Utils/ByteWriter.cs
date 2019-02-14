@@ -207,8 +207,8 @@ namespace LiteDB
                 case BsonType.MaxValue:
                     break;
 
-                case BsonType.Int32: this.Write((Int32)value.RawValue); break;
-                case BsonType.Int64: this.Write((Int64)value.RawValue); break;
+                case BsonType.Int32: this.Write(value.AsInt32); break;
+                case BsonType.Int64: this.Write(value.AsInt64); break;
                 case BsonType.Double: this.Write((Double)value.RawValue); break;
                 case BsonType.Decimal: this.Write((Decimal)value.RawValue); break;
 
@@ -221,7 +221,7 @@ namespace LiteDB
                 case BsonType.ObjectId: this.Write((ObjectId)value.RawValue); break;
                 case BsonType.Guid: this.Write((Guid)value.RawValue); break;
 
-                case BsonType.Boolean: this.Write((Boolean)value.RawValue); break;
+                case BsonType.Boolean: this.Write(value.AsBoolean); break;
                 case BsonType.DateTime: this.Write((DateTime)value.RawValue); break;
 
                 default: throw new NotImplementedException();

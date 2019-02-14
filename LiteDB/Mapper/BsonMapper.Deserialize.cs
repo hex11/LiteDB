@@ -114,7 +114,7 @@ namespace LiteDB
             // special cast to UInt64 to Int64
             else if (type == typeof(UInt64))
             {
-                return unchecked((UInt64)((Int64)value.RawValue));
+                return unchecked((UInt64)(value.AsInt64));
             }
 
             // enum value is an int
@@ -241,8 +241,9 @@ namespace LiteDB
         {
             var entity = this.GetEntityMapper(type);
 
-            foreach (var member in entity.Members.Where(x => x.Setter != null))
+            foreach (var member in entity.Members)
             {
+                if (member.Setter == null) continue;
                 var val = value[member.FieldName];
 
                 if (!val.IsNull)

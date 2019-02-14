@@ -105,7 +105,7 @@ namespace LiteDB
                 case BsonType.Boolean:
                     writer.Write((byte)0x08);
                     writer.WriteCString(key);
-                    writer.Write((byte)(((Boolean)value.RawValue) ? 0x01 : 0x00));
+                    writer.Write((byte)(value.AsBoolean ? 0x01 : 0x00));
                     break;
 
                 case BsonType.DateTime:
@@ -126,13 +126,13 @@ namespace LiteDB
                 case BsonType.Int32:
                     writer.Write((byte)0x10);
                     writer.WriteCString(key);
-                    writer.Write((Int32)value.RawValue);
+                    writer.Write(value.AsInt32);
                     break;
 
                 case BsonType.Int64:
                     writer.Write((byte)0x12);
                     writer.WriteCString(key);
-                    writer.Write((Int64)value.RawValue);
+                    writer.Write(value.AsInt64);
                     break;
 
                 case BsonType.Decimal:
