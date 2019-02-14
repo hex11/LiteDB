@@ -233,14 +233,32 @@ namespace LiteDB
         public BsonArray AsArray
         {
             get {
-                return this as BsonArray;
+                if (this is BsonArray arr) return arr;
+                if (IsArray) {
+                    arr = new BsonArray((List<BsonValue>)RawValue);
+                    arr.Length = this.Length;
+                    arr.parent = this.parent;
+                    arr.nameInParent = this.nameInParent;
+                    return arr;
+                } else {
+                    return null;
+                }
             }
         }
 
         public BsonDocument AsDocument
         {
             get {
-                return this as BsonDocument;
+                if (this is BsonDocument doc) return doc;
+                if (IsDocument) {
+                    doc = new BsonDocument((Dictionary<string, BsonValue>)RawValue);
+                    doc.Length = this.Length;
+                    doc.parent = this.parent;
+                    doc.nameInParent = this.nameInParent;
+                    return doc;
+                } else {
+                    return null;
+                }
             }
         }
 

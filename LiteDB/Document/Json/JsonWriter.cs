@@ -48,7 +48,7 @@ namespace LiteDB
                     break;
 
                 case BsonType.Boolean:
-                    _writer.Write(((bool)value.RawValue).ToString().ToLower());
+                    _writer.Write(value.AsBoolean ? "true" : "false");
                     break;
 
                 case BsonType.String:
@@ -56,7 +56,7 @@ namespace LiteDB
                     break;
 
                 case BsonType.Int32:
-                    _writer.Write((Int32)value.RawValue);
+                    _writer.Write(value.AsInt32);
                     break;
 
                 case BsonType.Double:
@@ -81,7 +81,7 @@ namespace LiteDB
                     break;
 
                 case BsonType.Int64:
-                    this.WriteExtendDataType("$numberLong", ((Int64)value.RawValue).ToString());
+                    this.WriteExtendDataType("$numberLong", value.AsInt64.ToString());
                     break;
 
                 case BsonType.Decimal:

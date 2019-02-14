@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,7 +16,7 @@ namespace LiteDB
             if (entity == null) throw new ArgumentNullException(nameof(entity));
 
             // if object is BsonDocument, just return them
-            if (entity is BsonDocument) return (BsonDocument)(object)entity;
+            if (entity is BsonDocument doc) return doc;
 
             return this.Serialize(type, entity, 0).AsDocument;
         }

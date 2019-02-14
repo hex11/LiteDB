@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 
 namespace LiteDB
@@ -47,7 +47,8 @@ namespace LiteDB
                         if (query.FilterDocument(doc) == false) continue;
                     }
 
-                    _log.Write(Logger.COMMAND, "delete document :: _id = {0}", node.Key.RawValue);
+                    if ((_log.Level & Logger.COMMAND) != 0)
+                        _log.Write(Logger.COMMAND, "delete document :: _id = {0}", node.Key.RawValue);
 
                     // get all indexes nodes from this data block
                     var allNodes = _indexer.GetNodeList(node, true).ToArray();
