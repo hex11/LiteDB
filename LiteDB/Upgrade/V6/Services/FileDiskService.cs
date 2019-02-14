@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -74,7 +74,7 @@ namespace LiteDB_V6
             }
             else if (_crypto != null)
             {
-                buffer = _crypto.Decrypt(buffer);
+                buffer = _crypto.Decrypt(buffer, new byte[buffer.Length]);
             }
 
             return buffer;

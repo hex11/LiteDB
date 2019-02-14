@@ -276,7 +276,7 @@ namespace LiteDB
             var position = state == LockState.Read ? _lockReadRand.Next(LOCK_INITIAL_POSITION, LOCK_INITIAL_POSITION + LOCK_WRITE_LENGTH) : LOCK_INITIAL_POSITION;
             var length = state == LockState.Read ? 1 : LOCK_WRITE_LENGTH;
 
-            _log.Write(Logger.LOCK, "locking file in {0} mode (position: {1})", state.ToString().ToLower(), position);
+            _log.Write(Logger.LOCK, "locking file in {0} mode (position: {1})", state, position);
 
             _stream.TryLock(position, length, timeout);
 
@@ -297,7 +297,7 @@ namespace LiteDB
 
             var length = state == LockState.Read ? LOCK_READ_LENGTH : LOCK_WRITE_LENGTH;
 
-            _log.Write(Logger.LOCK, "unlocking file in {0} mode (position: {1})", state.ToString().ToLower(), position);
+            _log.Write(Logger.LOCK, "unlocking file in {0} mode (position: {1})", state, position);
 
             _stream.TryUnlock(position, length);
 #endif

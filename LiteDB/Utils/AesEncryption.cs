@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Security.Cryptography;
 using System.IO;
 using System.Text;
@@ -29,38 +29,32 @@ namespace LiteDB
         /// <summary>
         /// Encrypt byte array returning new encrypted byte array with same length of original array (PAGE_SIZE)
         /// </summary>
-        public byte[] Encrypt(byte[] bytes)
+        public byte[] Encrypt(byte[] src, byte[] dst)
         {
             using (var encryptor = _aes.CreateEncryptor())
-            using (var stream = new MemoryStream())
+            using (var stream = new MemoryStream(dst))
             using (var crypto = new CryptoStream(stream, encryptor, CryptoStreamMode.Write))
             {
-                crypto.Write(bytes, 0, bytes.Length);
+                crypto.Write(src, 0, src.Length);
                 crypto.FlushFinalBlock();
-                stream.Position = 0;
-                var encrypted = new byte[stream.Length];
-                stream.Read(encrypted, 0, encrypted.Length);
 
-                return encrypted;
+                return dst;
             }
         }
 
         /// <summary>
         /// Decrypt and byte array returning a new byte array
         /// </summary>
-        public byte[] Decrypt(byte[] encryptedValue)
+        public byte[] Decrypt(byte[] src, byte[] dst)
         {
             using (var decryptor = _aes.CreateDecryptor())
-            using (var stream = new MemoryStream())
+            using (var stream = new MemoryStream(dst))
             using (var crypto = new CryptoStream(stream, decryptor, CryptoStreamMode.Write))
             {
-                crypto.Write(encryptedValue, 0, encryptedValue.Length);
+                crypto.Write(src, 0, src.Length);
                 crypto.FlushFinalBlock();
-                stream.Position = 0;
-                var decryptedBytes = new Byte[stream.Length];
-                stream.Read(decryptedBytes, 0, decryptedBytes.Length);
 
-                return decryptedBytes;
+                return dst;
             }
         }
 

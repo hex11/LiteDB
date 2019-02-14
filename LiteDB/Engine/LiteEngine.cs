@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 
 namespace LiteDB
@@ -269,6 +269,8 @@ namespace LiteDB
             {
                 stream.SetLength(initialSize);
 
+                byte[] encryptBuffer = crypto == null ? null : new byte[BasePage.PAGE_SIZE];
+
                 var pageID = 1u;
 
                 while(++pageID < (emptyPages + 2))
@@ -283,7 +285,7 @@ namespace LiteDB
 
                     if (password != null)
                     {
-                        bytes = crypto.Encrypt(bytes);
+                        bytes = crypto.Encrypt(bytes, encryptBuffer);
                     }
 
                     stream.Write(bytes, 0, BasePage.PAGE_SIZE);

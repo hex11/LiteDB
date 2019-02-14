@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -48,6 +48,22 @@ namespace LiteDB
         public bool HasTerminated
         {
             get { return this.Index >= this.Source.Length; }
+        }
+
+        public bool TryExpect(string str)
+        {
+            if (this.Source.Length - this.Index < str.Length) return false;
+            for (int i = 0; i < str.Length; i++) {
+                if (str[i] != Source[Index + i]) return false;
+            }
+            return true;
+        }
+
+        public bool TryConsome(string str)
+        {
+            var success = TryExpect(str);
+            if (success) Index += str.Length;
+            return success;
         }
 
         /// <summary>

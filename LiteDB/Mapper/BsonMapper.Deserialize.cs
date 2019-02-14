@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
@@ -170,10 +170,9 @@ namespace LiteDB
 
                 if (o is IDictionary && type.GetTypeInfo().IsGenericType)
                 {
-                    var k = type.GetTypeInfo().GetGenericArguments()[0];
-                    var t = type.GetTypeInfo().GetGenericArguments()[1];
+                    var args = type.GetTypeInfo().GetGenericArguments();
 
-                    this.DeserializeDictionary(k, t, (IDictionary)o, value.AsDocument);
+                    this.DeserializeDictionary(args[0], args[1], (IDictionary)o, value.AsDocument);
                 }
                 else
                 {

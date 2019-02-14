@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -37,7 +37,7 @@ namespace LiteDB
                     // if datafile are encrypted, decrypt buffer (header are not encrypted)
                     if (_crypto != null && pageID > 0)
                     {
-                        buffer = _crypto.Decrypt(buffer);
+                        buffer = _crypto.Decrypt(buffer, new byte[buffer.Length]);
                     }
 
                     page = BasePage.ReadPage(buffer);

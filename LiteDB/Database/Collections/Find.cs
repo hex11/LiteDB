@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -16,7 +16,7 @@ namespace LiteDB
         {
             if (query == null) throw new ArgumentNullException(nameof(query));
 
-            var docs = _engine.Value.Find(_name, query, _includes.ToArray(), skip, limit);
+            var docs = _engine.Value.Find(_name, query, _includes, skip, limit);
 
             foreach(var doc in docs)
             {

@@ -95,6 +95,8 @@ namespace LiteDB
             // header page (id=0) always must be first page to write on disk because it's will mark disk as "in recovery".
             _disk.WritePage(header.PageID, header.DiskData);
 
+            byte[] encryptBuffer = _crypto == null ? null : new byte[BasePage.PAGE_SIZE];
+
             // write rest pages
             foreach (var page in dirtyPages)
             {
@@ -103,7 +105,7 @@ namespace LiteDB
                 // DiskData was updated before
                 var buffer = page.DiskData;
                 if (_crypto != null && page.PageID != 0)
-                    buffer = _crypto.Encrypt(buffer);
+                    buffer = _crypto.Encrypt(buffer, encryptBuffer);
 
                 _disk.WritePage(page.PageID, buffer);
             }
@@ -145,6 +147,8 @@ namespace LiteDB
 
                 byte[] headerBuffer = null;
 
+                byte[] encryptBuffer = _crypto == null ? null : new byte[BasePage.PAGE_SIZE];
+
                 // read all journal pages
                 foreach (var buffer in _disk.ReadJournal(header.LastPageID))
                 {
@@ -160,7 +164,7 @@ namespace LiteDB
                     _log.Write(Logger.RECOVERY, "recover page #{0:0000}", pageID);
 
                     // write in stream (encrypt if datafile is encrypted)
-                    _disk.WritePage(pageID, _crypto == null ? buffer : _crypto.Encrypt(buffer));
+                    _disk.WritePage(pageID, _crypto == null ? buffer : _crypto.Encrypt(buffer, encryptBuffer));
                 }
 
                 // write header page

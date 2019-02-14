@@ -38,9 +38,19 @@ namespace LiteDB
         public virtual object RawValue { get; private set; }
 
         /// <summary>
-        /// Internal destroy method. Works only when used with BsonExpression
+        /// Remove this value from parent
         /// </summary>
-        internal Action Destroy = () => { };
+        internal void Destroy()
+        {
+            if (parent is BsonDocument doc) {
+                doc.Remove(nameInParent);
+            } else if (parent is BsonArray arr) {
+                arr.Remove(this);
+            }
+        }
+
+        internal BsonValue parent;
+        internal string nameInParent;
 
         #region Constructor
 
@@ -196,39 +206,15 @@ namespace LiteDB
 
         public BsonArray AsArray
         {
-            get
-            {
-                if (this.IsArray)
-                {
-                    var array = new BsonArray((List<BsonValue>)this.RawValue);
-                    array.Length = this.Length;
-                    array.Destroy = this.Destroy;
-
-                    return array;
-                }
-                else
-                {
-                    return default(BsonArray);
-                }
+            get {
+                return this as BsonArray;
             }
         }
 
         public BsonDocument AsDocument
         {
-            get
-            {
-                if (this.IsDocument)
-                {
-                    var doc = new BsonDocument((Dictionary<string, BsonValue>)this.RawValue);
-                    doc.Length = this.Length;
-                    doc.Destroy = this.Destroy;
-
-                    return doc;
-                }
-                else
-                {
-                    return default(BsonDocument);
-                }
+            get {
+                return this as BsonDocument;
             }
         }
 

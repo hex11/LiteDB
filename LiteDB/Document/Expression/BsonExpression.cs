@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
@@ -147,7 +147,7 @@ namespace LiteDB
             {
                 // if read path, read first expression only
                 // support missing $ as root
-                s.Scan(@"\$\.?");
+                if (s.TryConsome("$")) s.TryConsome(".");
                 expr = ParseSingleExpression(s, root, current, true);
             }
             else
@@ -263,20 +263,20 @@ namespace LiteDB
 
                 return Expression.NewArrayInit(typeof(BsonValue), value);
             }
-            else if (s.Match(@"(true|false)")) // read bool
+            else if (s.TryExpect("true") || s.TryExpect("false")) // read bool
             {
-                var boolean = Convert.ToBoolean(s.Scan(@"(true|false)"));
+                var boolean = s.TryConsome("true") ? true : s.TryConsome("false") ? false : throw new Exception("impossible");
                 var value = Expression.Constant(new BsonValue(boolean));
 
                 return Expression.NewArrayInit(typeof(BsonValue), value);
             }
-            else if (s.Match(@"null")) // read null
+            else if (s.TryConsome("null")) // read null
             {
                 var value = Expression.Constant(BsonValue.Null);
 
                 return Expression.NewArrayInit(typeof(BsonValue), value);
             }
-            else if (s.Match(@"'")) // read string
+            else if (s.TryExpect(@"'")) // read string
             {
                 var str = s.Scan(@"'([\s\S]*?)'", 1);
                 var value = Expression.Constant(new BsonValue(str));
@@ -445,7 +445,8 @@ namespace LiteDB
                 if (value.AsDocument.TryGetValue(name, out BsonValue item))
                 {
                     // fill destroy action to remove value from root
-                    item.Destroy = () => value.AsDocument.Remove(name);
+                    item.parent = value;
+                    item.nameInParent = name;
 
                     yield return item;
                 }
@@ -462,7 +463,8 @@ namespace LiteDB
                 if (doc.TryGetValue(name, out BsonValue item))
                 {
                     // fill destroy action to remove value from parent document
-                    item.Destroy = () => doc.Remove(name);
+                    item.parent = doc;
+                    item.nameInParent = name;
 
                     yield return item;
                 }
@@ -491,7 +493,7 @@ namespace LiteDB
                             if (c.IsBoolean && c.AsBoolean == true)
                             {
                                 // fill destroy action to remove value from parent array
-                                item.Destroy = () => arr.Remove(item);
+                                item.parent = arr;
 
                                 yield return item;
                             }
@@ -503,7 +505,7 @@ namespace LiteDB
                         foreach (var item in arr)
                         {
                             // fill destroy action to remove value from parent array
-                            item.Destroy = () => arr.Remove(item);
+                            item.parent = arr;
 
                             yield return item;
                         }
@@ -518,7 +520,7 @@ namespace LiteDB
                             var item = arr[idx];
 
                             // fill destroy action to remove value from parent array
-                            item.Destroy = () => arr.Remove(item);
+                            item.parent = arr;
 
                             yield return item;
                         }
