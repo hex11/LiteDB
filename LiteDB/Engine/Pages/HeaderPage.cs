@@ -107,6 +107,7 @@ namespace LiteDB
 
         internal override void WriteContent(ref ByteWriter writer)
         {
+            var startPos = writer.Position;
             writer.Write(HEADER_INFO, HEADER_INFO.Length);
             writer.Write(FILE_VERSION);
             writer.Write(this.ChangeID);
@@ -123,16 +124,16 @@ namespace LiteDB
                 writer.Write(this.CollectionPages[key]);
             }
 
-            writer.Position = BasePage.PAGE_SIZE - 1;
+            writer.Position = startPos - PAGE_HEADER_SIZE + BasePage.PAGE_SIZE - 1;
             writer.Write(this.Recovery);
         }
 
-        internal void UpdateRecoveryByte()
-        {
-            var writer = new ByteWriter(DiskData);
-            writer.Position = BasePage.PAGE_SIZE - 1;
-            writer.Write(this.Recovery);
-        }
+        //internal void UpdateRecoveryByte()
+        //{
+        //    var writer = new ByteWriter(DiskData);
+        //    writer.Position = BasePage.PAGE_SIZE - 1;
+        //    writer.Write(this.Recovery);
+        //}
 
         #endregion
     }

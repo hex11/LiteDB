@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 
@@ -61,7 +61,7 @@ namespace LiteDB
 
                     var page = temp.ReadPage(i);
 
-                    _disk.WritePage(i, page);
+                    _disk.WritePage(i, page, 0, 1);
                 }
 
                 // create/destroy crypto class

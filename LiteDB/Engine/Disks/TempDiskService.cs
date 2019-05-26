@@ -67,7 +67,7 @@ namespace LiteDB
                     LastPageID = 1
                 };
 
-                return header.WritePage();
+                return header.WritePage_NewBuffer();
             }
             else if (_stream == null)
             {
@@ -92,7 +92,7 @@ namespace LiteDB
         /// <summary>
         /// Persist single page bytes to disk
         /// </summary>
-        public virtual void WritePage(uint pageID, byte[] buffer)
+        public virtual void WritePage(uint pageID, byte[] buffer, int offset, int pageCount)
         {
             if (_stream == null) this.InternalInitialize();
 
@@ -104,7 +104,7 @@ namespace LiteDB
                 _stream.Seek(position, SeekOrigin.Begin);
             }
 
-            _stream.Write(buffer, 0, BasePage.PAGE_SIZE);
+            _stream.Write(buffer, offset, BasePage.PAGE_SIZE * pageCount);
         }
 
         /// <summary>
@@ -135,7 +135,7 @@ namespace LiteDB
         /// <summary>
         /// No journal
         /// </summary>
-        public void WriteJournal(ICollection<BasePage> pages, uint lastPageID)
+        public void WriteJournal(byte[] buffer, uint lastPageID, uint count)
         {
         }
 

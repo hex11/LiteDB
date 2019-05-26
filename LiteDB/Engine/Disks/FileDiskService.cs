@@ -116,7 +116,7 @@ namespace LiteDB
         /// <summary>
         /// Persist single page bytes to disk
         /// </summary>
-        public virtual void WritePage(uint pageID, byte[] buffer)
+        public virtual void WritePage(uint pageID, byte[] buffer, int offset, int pageCount)
         {
             var position = BasePage.GetSizeOfPages(pageID);
 
@@ -128,7 +128,7 @@ namespace LiteDB
                 _stream.Seek(position, SeekOrigin.Begin);
             }
 
-            _stream.Write(buffer, 0, BasePage.PAGE_SIZE);
+            _stream.Write(buffer, offset, BasePage.PAGE_SIZE * pageCount);
         }
 
         /// <summary>
@@ -157,21 +157,16 @@ namespace LiteDB
         /// </summary>
         public bool IsJournalEnabled { get { return _options.Journal; } }
 
-        const int JOURNAL_BUF_PAGES = 8;
-        byte[] journalBuf;
 
         /// <summary>
         /// Write original bytes page in a journal file (in sequence) - if journal not exists, create.
         /// </summary>
-        public void WriteJournal(ICollection<BasePage> pages, uint lastPageID)
+        public void WriteJournal(byte[] buffer, uint lastPageID, uint count)
         {
             // write journal only if enabled
             if (_options.Journal == false) return;
 
-            var size = BasePage.GetSizeOfPages(lastPageID + 1) +
-                BasePage.GetSizeOfPages(pages.Count);
-
-            _log.Write(Logger.JOURNAL, "extend datafile to journal - {0} pages", pages.Count);
+            _log.Write(Logger.JOURNAL, "extend datafile to journal - {0} pages", count);
 
             //// set journal file length before write
             //_stream.SetLength(size);
@@ -179,25 +174,8 @@ namespace LiteDB
             // go to initial file position (after lastPageID)
             _stream.Seek(BasePage.GetSizeOfPages(lastPageID + 1), SeekOrigin.Begin);
 
-            if (journalBuf == null)
-                journalBuf = new byte[BasePage.PAGE_SIZE * JOURNAL_BUF_PAGES];
-            var bufCur = 0;
-
-            foreach (var p in pages)
-            {
-                _log.Write(Logger.JOURNAL, "write page #{0:0000} :: {1}", p.PageID, p.PageType);
-
-                // write page bytes to buffer
-                Buffer.BlockCopy(p.DiskData, 0, journalBuf, bufCur * BasePage.PAGE_SIZE, BasePage.PAGE_SIZE);
-                bufCur++;
-                if (bufCur == JOURNAL_BUF_PAGES) {
-                    _stream.Write(journalBuf, 0, bufCur * BasePage.PAGE_SIZE);
-                    bufCur = 0;
-                }
-            }
-
-            if (bufCur > 0)
-                _stream.Write(journalBuf, 0, bufCur * BasePage.PAGE_SIZE);
+            if (count > 0)
+                _stream.Write(buffer, 0, (int)count * BasePage.PAGE_SIZE);
 
             _log.Write(Logger.JOURNAL, "flush journal to disk");
 

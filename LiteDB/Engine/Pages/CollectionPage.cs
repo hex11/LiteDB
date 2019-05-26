@@ -109,6 +109,7 @@ namespace LiteDB
 
         internal override void WriteContent(ref ByteWriter writer)
         {
+            var startPos = writer.Position;
             writer.Write(this.CollectionName);
             writer.Write(this.DocumentCount);
             writer.Write(this.FreeDataPageID);
@@ -132,7 +133,7 @@ namespace LiteDB
             }
 
             // position on page-footer (avoid file structure change)
-            writer.Position = BasePage.PAGE_SIZE - 8 - CollectionIndex.INDEX_PER_COLLECTION;
+            writer.Position = startPos - PAGE_HEADER_SIZE + BasePage.PAGE_SIZE - 8 - CollectionIndex.INDEX_PER_COLLECTION;
 
             foreach (var index in this.Indexes)
             {

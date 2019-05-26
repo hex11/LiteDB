@@ -19,7 +19,7 @@ namespace LiteDB
         /// <summary>
         /// Write a page in disk datafile
         /// </summary>
-        void WritePage(uint pageID, byte[] buffer);
+        void WritePage(uint pageID, byte[] buffer, int offset, int pageCount);
 
         /// <summary>
         /// Set datafile length before start writing in disk
@@ -49,7 +49,7 @@ namespace LiteDB
         /// <summary>
         /// Write original bytes page in a journal file (in sequence) - if journal not exists, create.
         /// </summary>
-        void WriteJournal(ICollection<BasePage> pages, uint lastPageID);
+        void WriteJournal(byte[] buffer, uint lastPageID, uint count);
 
         /// <summary>
         /// Clear journal file

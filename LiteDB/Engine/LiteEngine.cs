@@ -254,9 +254,10 @@ namespace LiteDB
             stream.Seek(0, SeekOrigin.Begin);
 
             // get header page in bytes
-            var buffer = header.WritePage();
+            var reusedBuffer = new byte[BasePage.PAGE_SIZE];
+            header.WritePage(reusedBuffer);
 
-            stream.Write(buffer, 0, BasePage.PAGE_SIZE);
+            stream.Write(reusedBuffer, 0, BasePage.PAGE_SIZE);
 
             // write second page as an empty AREA (it's not a page) just to use as lock control
             stream.Write(new byte[BasePage.PAGE_SIZE], 0, BasePage.PAGE_SIZE);
@@ -280,15 +281,15 @@ namespace LiteDB
                         PrevPageID = pageID == 2 ? 0 : pageID - 1,
                         NextPageID = pageID == emptyPages + 1 ? uint.MaxValue : pageID + 1
                     };
-
-                    var bytes = empty.WritePage();
+                    var buffer = reusedBuffer;
+                    empty.WritePage(buffer);
 
                     if (password != null)
                     {
-                        bytes = crypto.Encrypt(bytes, encryptBuffer);
+                        buffer = crypto.Encrypt(buffer, encryptBuffer);
                     }
 
-                    stream.Write(bytes, 0, BasePage.PAGE_SIZE);
+                    stream.Write(buffer, 0, BasePage.PAGE_SIZE);
                 }
             }
 

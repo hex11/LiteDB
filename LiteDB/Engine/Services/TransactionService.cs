@@ -48,6 +48,9 @@ namespace LiteDB
             return false;
         }
 
+        const int JOURNAL_BUF_PAGES = 64;
+        byte[] journalBuf;
+
         /// <summary>
         /// Save all dirty pages to disk
         /// </summary>
@@ -66,11 +69,6 @@ namespace LiteDB
 
             var dirtyPages = _cache.GetDirtyPages().ToList();
 
-            // update DiskData of dirty pages
-            foreach (var item in dirtyPages) {
-                item.WritePage();
-            }
-            
             if (_disk.IsJournalEnabled) {
                 // sort and ensure the header page is the last
                 // the result list will be like: [1, 2, 3, 0]
@@ -80,11 +78,26 @@ namespace LiteDB
                     return a.PageID.CompareTo(b.PageID);
                 });
 
-                _disk.WriteJournal(dirtyPages, header.LastPageID);
+                if (journalBuf == null) journalBuf = new byte[JOURNAL_BUF_PAGES * BasePage.PAGE_SIZE];
+
+                uint bufCur = 0;
+                uint pageOffset = header.LastPageID;
+                for (int i = 0; i < dirtyPages.Count; i++) {
+                    var p = dirtyPages[i];
+                    _log.Write(Logger.JOURNAL, "write page #{0:0000} :: {1}", p.PageID, p.PageType);
+
+                    // write page bytes to buffer
+                    p.WritePage(journalBuf, (int)bufCur * BasePage.PAGE_SIZE);
+                    bufCur++;
+                    if (bufCur == JOURNAL_BUF_PAGES || i == dirtyPages.Count- 1) {
+                        _disk.WriteJournal(journalBuf, pageOffset, bufCur);
+                        pageOffset += bufCur;
+                        bufCur = 0;
+                    }
+                }
 
                 // mark header as recovery before start writing (in journal, must keep recovery = false)
                 header.Recovery = true;
-                header.UpdateRecoveryByte();
             }
             else
             {
@@ -92,33 +105,72 @@ namespace LiteDB
                 _disk.SetLength(BasePage.GetSizeOfPages(header.LastPageID + 1));
             }
 
-            // header page (id=0) always must be first page to write on disk because it's will mark disk as "in recovery".
-            _disk.WritePage(header.PageID, header.DiskData);
-
+            var reusedBuffer = new byte[BasePage.PAGE_SIZE];
             byte[] encryptBuffer = _crypto == null ? null : new byte[BasePage.PAGE_SIZE];
 
-            // write rest pages
-            foreach (var page in dirtyPages)
-            {
-                if (page.PageID == 0) continue;
+            // header page (id=0) always must be first page to write on disk because it's will mark disk as "in recovery".
+            header.WritePage(reusedBuffer);
+            _disk.WritePage(header.PageID, reusedBuffer, 0, 1);
 
-                // DiskData was updated before
-                var buffer = page.DiskData;
-                if (_crypto != null && page.PageID != 0)
-                    buffer = _crypto.Encrypt(buffer, encryptBuffer);
+            if (dirtyPages.Count > JOURNAL_BUF_PAGES)
+                Console.WriteLine("oh no");
 
-                _disk.WritePage(page.PageID, buffer);
-            }
-
-            if (_disk.IsJournalEnabled)
-            {
-                // re-write header page but now with recovery=false
+            if (_disk.IsJournalEnabled && dirtyPages.Count <= JOURNAL_BUF_PAGES) {
+                // then we can just copy from the journal buffer.
+                // the dirtyPages is sorted and the header page is always the last.
+                for (int i = 0; i < dirtyPages.Count;) {
+                    var pageId = dirtyPages[i].PageID;
+                    if (_crypto != null && pageId != 0) {
+                        var buffer = reusedBuffer;
+                        Buffer.BlockCopy(journalBuf, i * BasePage.PAGE_SIZE, buffer, 0, BasePage.PAGE_SIZE);
+                        buffer = _crypto.Encrypt(buffer, encryptBuffer);
+                        _disk.WritePage(pageId, buffer, 0, 1);
+                        i++;
+                    } else {
+                        var beginI = i;
+                        i++;
+                        if (_crypto == null) {
+                            // try to merge mulitple writing operations
+                            var lastPageId = pageId;
+                            while (i < dirtyPages.Count) {
+                                var curI = i;
+                                var curPageId = dirtyPages[curI].PageID;
+                                if (curPageId == lastPageId + 1) {
+                                    lastPageId = curPageId;
+                                    i++;
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
+                        _disk.WritePage(pageId, journalBuf, beginI * BasePage.PAGE_SIZE, i - beginI);
+                    }
+                }
                 header.Recovery = false;
-                header.UpdateRecoveryByte();
+            } else { 
+                // write rest pages
+                foreach (var page in dirtyPages)
+                {
+                    if (page.PageID == 0) continue;
 
-                _log.Write(Logger.DISK, "re-write header page now with recovery = false");
+                    var buffer = reusedBuffer;
+                    page.WritePage(buffer);
+                    if (_crypto != null && page.PageID != 0)
+                        buffer = _crypto.Encrypt(buffer, encryptBuffer);
 
-                _disk.WritePage(header.PageID, header.DiskData);
+                    _disk.WritePage(page.PageID, buffer, 0, 1);
+                }
+
+                if (_disk.IsJournalEnabled)
+                {
+                    // re-write header page but now with recovery=false
+                    header.Recovery = false;
+                    header.WritePage(reusedBuffer);
+
+                    _log.Write(Logger.DISK, "re-write header page now with recovery = false");
+
+                    _disk.WritePage(header.PageID, reusedBuffer, 0, 1);
+                }
             }
 
             // mark all dirty pages as clean pages (all are persisted in disk and are valid pages)
@@ -150,8 +202,9 @@ namespace LiteDB
                 byte[] encryptBuffer = _crypto == null ? null : new byte[BasePage.PAGE_SIZE];
 
                 // read all journal pages
-                foreach (var buffer in _disk.ReadJournal(header.LastPageID))
+                foreach (var buffer_ in _disk.ReadJournal(header.LastPageID))
                 {
+                    var buffer = buffer_;
                     // read pageID (first 4 bytes)
                     var pageID = BitConverter.ToUInt32(buffer, 0);
 
@@ -163,13 +216,15 @@ namespace LiteDB
 
                     _log.Write(Logger.RECOVERY, "recover page #{0:0000}", pageID);
 
+                    if (_crypto != null) buffer = _crypto.Encrypt(buffer, encryptBuffer);
+
                     // write in stream (encrypt if datafile is encrypted)
-                    _disk.WritePage(pageID, _crypto == null ? buffer : _crypto.Encrypt(buffer, encryptBuffer));
+                    _disk.WritePage(pageID, buffer, 0, 1);
                 }
 
                 // write header page
                 if (headerBuffer != null) { // (header page is always in journal?)
-                    _disk.WritePage(0, headerBuffer);
+                    _disk.WritePage(0, headerBuffer, 0, 1);
                 }
 
                 // shrink datafile

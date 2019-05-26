@@ -67,9 +67,9 @@ namespace LiteDB
         /// <summary>
         /// This is the data when read first from disk - used to journal operations (IDiskService only will use)
         /// </summary>
-        public byte[] DiskData { get; set; }
+        //public byte[] DiskData { get; set; }
 
-        static readonly byte[] ZeroLengthByteArray = new byte[0];
+        //static readonly byte[] ZeroLengthByteArray = new byte[0];
 
         public BasePage(uint pageID)
         {
@@ -78,7 +78,6 @@ namespace LiteDB
             this.NextPageID = uint.MaxValue;
             this.ItemCount = 0;
             this.FreeBytes = PAGE_AVAILABLE_BYTES;
-            this.DiskData = ZeroLengthByteArray;
         }
 
         /// <summary>
@@ -159,19 +158,23 @@ namespace LiteDB
             page.ReadHeader(ref reader);
             page.ReadContent(ref reader);
 
-            page.DiskData = buffer;
+            //page.DiskData = buffer;
 
             return page;
         }
 
+        static readonly byte[] emptyPage = new byte[PAGE_SIZE];
+
         /// <summary>
         /// Update DiskData and return it
         /// </summary>
-        public byte[] WritePage()
+        public void WritePage(byte[] buffer, int offset = 0)
         {
-            if (DiskData.Length == 0)
-                DiskData = new byte[PAGE_SIZE];
-            var writer = new ByteWriter(DiskData);
+            var writer = new ByteWriter(buffer);
+            writer.Position = offset;
+
+            // fill zeros
+            Buffer.BlockCopy(emptyPage, 0, buffer, offset, PAGE_SIZE);
 
             this.WriteHeader(ref writer);
 
@@ -180,7 +183,19 @@ namespace LiteDB
                 this.WriteContent(ref writer);
             }
 
-            return writer.Buffer;
+            // fill zeros to unused space (assuming the current writer position is the last used byte).
+            //var pos = writer.Position;
+            //var end = offset + PAGE_SIZE;
+            //while (pos < end) {
+            //    buffer[pos++] = 0;
+            //}
+        }
+
+        public byte[] WritePage_NewBuffer()
+        {
+            var buf = new byte[PAGE_SIZE];
+            WritePage(buf);
+            return buf;
         }
 
         private void ReadHeader(ref ByteReader reader)
@@ -213,5 +228,10 @@ namespace LiteDB
         internal abstract void WriteContent(ref ByteWriter writer);
 
         #endregion
+
+        public override string ToString()
+        {
+            return $"{this.GetType().Name}#{PageID}";
+        }
     }
 }
