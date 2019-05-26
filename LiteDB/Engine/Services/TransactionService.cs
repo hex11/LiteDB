@@ -49,7 +49,15 @@ namespace LiteDB
         }
 
         const int JOURNAL_BUF_PAGES = 64;
-        byte[] journalBuf;
+        WeakReference reuseJournalBuffer;
+        List<BasePage> reusePageList;
+
+        static readonly Comparison<BasePage> pageSorter = (a, b) =>
+        {
+            if (a.PageID == 0) return int.MaxValue;
+            if (b.PageID == 0) return int.MinValue;
+            return a.PageID.CompareTo(b.PageID);
+        };
 
         /// <summary>
         /// Save all dirty pages to disk
@@ -67,29 +75,42 @@ namespace LiteDB
 
             _log.Write(Logger.DISK, "begin disk operations - changeID: {0}", header.ChangeID);
 
-            var dirtyPages = _cache.GetDirtyPages().ToList();
+            var unsortedPages = _cache.GetDirtyPages();
 
-            if (_disk.IsJournalEnabled) {
+            if (reusePageList == null) reusePageList = new List<BasePage>(unsortedPages.Count);
+
+            reusePageList.AddRange(unsortedPages);
+
+            var dirtyPages = reusePageList;
+
+            byte[] journalBuf = null;
+
+            if (_disk.IsJournalEnabled)
+            {
                 // sort and ensure the header page is the last
                 // the result list will be like: [1, 2, 3, 0]
-                dirtyPages.Sort((a, b) => {
-                    if (a.PageID == 0) return int.MaxValue;
-                    if (b.PageID == 0) return int.MinValue;
-                    return a.PageID.CompareTo(b.PageID);
-                });
+                dirtyPages.Sort(pageSorter);
 
-                if (journalBuf == null) journalBuf = new byte[JOURNAL_BUF_PAGES * BasePage.PAGE_SIZE];
+                journalBuf = reuseJournalBuffer?.Target as byte[];
+                if (journalBuf == null)
+                {
+                    journalBuf = new byte[JOURNAL_BUF_PAGES * BasePage.PAGE_SIZE];
+                    if (reuseJournalBuffer == null) reuseJournalBuffer = new WeakReference(null);
+                    reuseJournalBuffer.Target = journalBuf;
+                }
 
                 uint bufCur = 0;
                 uint pageOffset = header.LastPageID;
-                for (int i = 0; i < dirtyPages.Count; i++) {
+                for (int i = 0; i < dirtyPages.Count; i++)
+                {
                     var p = dirtyPages[i];
                     _log.Write(Logger.JOURNAL, "write page #{0:0000} :: {1}", p.PageID, p.PageType);
 
                     // write page bytes to buffer
                     p.WritePage(journalBuf, (int)bufCur * BasePage.PAGE_SIZE);
                     bufCur++;
-                    if (bufCur == JOURNAL_BUF_PAGES || i == dirtyPages.Count- 1) {
+                    if (bufCur == JOURNAL_BUF_PAGES || i == dirtyPages.Count - 1)
+                    {
                         _disk.WriteJournal(journalBuf, pageOffset, bufCur);
                         pageOffset += bufCur;
                         bufCur = 0;
@@ -112,33 +133,40 @@ namespace LiteDB
             header.WritePage(reusedBuffer);
             _disk.WritePage(header.PageID, reusedBuffer, 0, 1);
 
-            if (dirtyPages.Count > JOURNAL_BUF_PAGES)
-                Console.WriteLine("oh no");
-
-            if (_disk.IsJournalEnabled && dirtyPages.Count <= JOURNAL_BUF_PAGES) {
+            if (_disk.IsJournalEnabled && dirtyPages.Count <= JOURNAL_BUF_PAGES)
+            {
                 // then we can just copy from the journal buffer.
                 // the dirtyPages is sorted and the header page is always the last.
-                for (int i = 0; i < dirtyPages.Count;) {
+                for (int i = 0; i < dirtyPages.Count;)
+                {
                     var pageId = dirtyPages[i].PageID;
-                    if (_crypto != null && pageId != 0) {
+                    if (_crypto != null && pageId != 0)
+                    {
                         var buffer = reusedBuffer;
                         Buffer.BlockCopy(journalBuf, i * BasePage.PAGE_SIZE, buffer, 0, BasePage.PAGE_SIZE);
                         buffer = _crypto.Encrypt(buffer, encryptBuffer);
                         _disk.WritePage(pageId, buffer, 0, 1);
                         i++;
-                    } else {
+                    }
+                    else
+                    {
                         var beginI = i;
                         i++;
-                        if (_crypto == null) {
+                        if (_crypto == null)
+                        {
                             // try to merge mulitple writing operations
                             var lastPageId = pageId;
-                            while (i < dirtyPages.Count) {
+                            while (i < dirtyPages.Count)
+                            {
                                 var curI = i;
                                 var curPageId = dirtyPages[curI].PageID;
-                                if (curPageId == lastPageId + 1) {
+                                if (curPageId == lastPageId + 1)
+                                {
                                     lastPageId = curPageId;
                                     i++;
-                                } else {
+                                }
+                                else
+                                {
                                     break;
                                 }
                             }
@@ -147,7 +175,9 @@ namespace LiteDB
                     }
                 }
                 header.Recovery = false;
-            } else { 
+            }
+            else
+            {
                 // write rest pages
                 foreach (var page in dirtyPages)
                 {
@@ -172,6 +202,8 @@ namespace LiteDB
                     _disk.WritePage(header.PageID, reusedBuffer, 0, 1);
                 }
             }
+
+            reusePageList.Clear();
 
             // mark all dirty pages as clean pages (all are persisted in disk and are valid pages)
             _cache.MarkDirtyAsClean();
@@ -209,7 +241,8 @@ namespace LiteDB
                     var pageID = BitConverter.ToUInt32(buffer, 0);
 
                     // don't write the header page now, write it in the end
-                    if (pageID == 0) {
+                    if (pageID == 0)
+                    {
                         headerBuffer = buffer;
                         continue;
                     }
@@ -223,7 +256,9 @@ namespace LiteDB
                 }
 
                 // write header page
-                if (headerBuffer != null) { // (header page is always in journal?)
+                // (header page is always in journal?)
+                if (headerBuffer != null)
+                {
                     _disk.WritePage(0, headerBuffer, 0, 1);
                 }
 
