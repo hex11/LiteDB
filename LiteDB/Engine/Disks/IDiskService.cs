@@ -54,7 +54,7 @@ namespace LiteDB
         /// <summary>
         /// Clear journal file
         /// </summary>
-        void ClearJournal(uint lastPageID);
+        void ClearJournal(uint lastPageID, bool mustClear);
 
         /// <summary>
         /// Ensures all pages from the OS cache are persisted on medium

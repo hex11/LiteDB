@@ -169,7 +169,7 @@ namespace LiteDB
             _log.Write(Logger.JOURNAL, "extend datafile to journal - {0} pages", count);
 
             //// set journal file length before write
-            //_stream.SetLength(size);
+            //_stream.SetLength((lastPageID + 1 + count) * BasePage.PAGE_SIZE);
 
             // go to initial file position (after lastPageID)
             _stream.Seek(BasePage.GetSizeOfPages(lastPageID + 1), SeekOrigin.Begin);
@@ -212,11 +212,20 @@ namespace LiteDB
         /// <summary>
         /// Shrink datafile to crop journal area
         /// </summary>
-        public void ClearJournal(uint lastPageID)
+        public void ClearJournal(uint lastPageID, bool mustClear)
         {
-            _log.Write(Logger.JOURNAL, "shrink datafile to remove journal area");
-
-            this.SetLength(BasePage.GetSizeOfPages(lastPageID + 1));
+            // keep some space for future journal to avoid frequently change the file size
+            // and boost the journal performance.
+            var sizeAllowed = BasePage.GetSizeOfPages(lastPageID + 1 + (uint)(mustClear ? 0 : 64));
+            if (this.FileLength > sizeAllowed)
+            {
+                _log.Write(Logger.JOURNAL, "shrink datafile to remove journal area");
+                this.SetLength(sizeAllowed);
+            }
+            else
+            {
+                _log.Write(Logger.JOURNAL, "skip shrinking datafile");
+            }
         }
 
         /// <summary>
@@ -299,7 +308,7 @@ namespace LiteDB
                     .GetResult();
             }
 #endif
-            return new FileStream(path, mode, access, share, 
+            return new FileStream(path, mode, access, share,
                 BasePage.PAGE_SIZE,
                 System.IO.FileOptions.RandomAccess);
         }

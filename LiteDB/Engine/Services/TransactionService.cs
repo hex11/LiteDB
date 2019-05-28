@@ -211,8 +211,8 @@ namespace LiteDB
             // flush all data direct to disk
             _disk.Flush();
 
-            // discard journal file
-            _disk.ClearJournal(header.LastPageID);
+            // discard journal file and ensure the journal is cleared when encryption is enabled.
+            _disk.ClearJournal(header.LastPageID, _crypto != null);
         }
 
         /// <summary>
@@ -244,7 +244,9 @@ namespace LiteDB
                     if (pageID == 0)
                     {
                         headerBuffer = buffer;
-                        continue;
+                        // there may be some unused space after header page.
+                        // (assuming header page is the last page in journal)
+                        break;
                     }
 
                     _log.Write(Logger.RECOVERY, "recover page #{0:0000}", pageID);
@@ -263,7 +265,7 @@ namespace LiteDB
                 }
 
                 // shrink datafile
-                _disk.ClearJournal(header.LastPageID);
+                _disk.ClearJournal(header.LastPageID, _crypto != null);
             }
         }
     }

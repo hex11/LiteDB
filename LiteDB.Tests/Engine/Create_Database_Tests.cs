@@ -1,4 +1,4 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 using System.IO;
 using System.Linq;
@@ -12,7 +12,7 @@ namespace LiteDB.Tests.Engine
         public void Create_Database_With_Initial_Size()
         {
             var initial = 40 * 1024; // initial size: 40kb
-            var minimal = 4096 * 5; // 1 header + 1 lock + 1 collection + 1 data + 1 index = 5 pages minimal
+            var minimal = BasePage.PAGE_SIZE * 5; // 1 header + 1 lock + 1 collection + 1 data + 1 index = 5 pages minimal
 
             using (var file = new TempFile())
             using (var db = new LiteDatabase(file.Conn("initial size=40kb")))
@@ -26,7 +26,9 @@ namespace LiteDB.Tests.Engine
                 // simple insert to test if datafile still with 40kb
                 db.Engine.Run("db.col1.insert {a:1}"); // use 3 pages to this
 
-                Assert.AreEqual(initial, file.Size);
+                Assert.AreEqual(initial + 5 * BasePage.PAGE_SIZE, file.Size);
+                // there are more 5 pages which are journal and should not be shrinked.
+                // note that these pages will be shrinked if encryption were enabled.
 
                 // ok, now shrink and test if file are minimal size
                 db.Shrink();
@@ -39,7 +41,7 @@ namespace LiteDB.Tests.Engine
         public void Create_Database_With_Initial_Size_Encrypted()
         {
             var initial = 40 * 1024; // initial size: 40kb
-            var minimal = 4096 * 5; // 1 header + 1 lock + 1 collection + 1 data + 1 index = 5 pages minimal
+            var minimal = BasePage.PAGE_SIZE * 5; // 1 header + 1 lock + 1 collection + 1 data + 1 index = 5 pages minimal
 
             using (var file = new TempFile(checkIntegrity: false))
             using (var db = new LiteDatabase(file.Conn("initial size=40kb; password=123")))

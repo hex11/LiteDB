@@ -47,11 +47,11 @@ namespace LiteDB
                 // copy user version
                 engine.UserVersion = this.UserVersion;
 
-                // set current disk size to exact new disk usage
-                _disk.SetLength(temp.FileLength);
-
                 // read new header page to start copy
                 var header = BasePage.ReadPage(temp.ReadPage(0)) as HeaderPage;
+
+                // set current disk size to speed up writing
+                _disk.SetLength(BasePage.GetSizeOfPages(header.LastPageID + 1));
 
                 // copy (as is) all pages from temp disk to original disk
                 for (uint i = 0; i <= header.LastPageID; i++)

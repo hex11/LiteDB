@@ -150,7 +150,7 @@ namespace LiteDB
         /// <summary>
         /// No journal
         /// </summary>
-        public void ClearJournal(uint lastPageID)
+        public void ClearJournal(uint lastPageID, bool mustClear)
         {
         }
 
